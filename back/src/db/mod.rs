@@ -1,68 +1,36 @@
+use mongodb::Client;
 use mongodb::options::ClientOptions;
-use mongodb::bson::{doc, DateTime, Document};
-use mongodb::{Client, Database};
-use rocket::fairing::AdHoc;
-use std::env;
+use mongodb::bson::doc;
+use futures::stream::TryStreamExt;
 use crate::model::User;
+use std::env;
 
-//pub mod customer;
+// https://doc.rust-lang.org/std/result/enum.Result.html
+// https://docs.rs/mongodb/latest/mongodb/error/type.Result.html
+// https://docs.rs/mongodb/latest/mongodb/error/struct.Error.html
+// https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html
+// https://docs.rs/mongodb/latest/mongodb/error/enum.ErrorKind.html
+// https://www.mongodb.com/docs/drivers/rust/
+// https://docs.rs/mongodb/latest/mongodb/
+pub async fn find_user(id: &String, pw: &String) -> mongodb::error::Result<String> {
+    env::set_var("RUST_BACKTRACE", "1");
 
-//let MONGO_URI = "localhost:8081";
-//let MONGO_DB_NAME = "honey";
-
-pub fn init() -> AdHoc {
-    AdHoc::on_ignite("Connecting to MongoDB", |rocket| async {
-        match connect().await {
-            Ok(database) => rocket.manage(database),
-            Err(error) => {
-                panic!("Cannot connect to instance:: {:?}", error)
-            }
-        }
-    })
-}
-
-pub async fn connect() -> mongodb::error::Result<Database> {
-    let mongo_uri = "mongodb://root:example@mongo:27017/";//env::var("MONGO_URI").expect("MONGO_URI is not found.");
-    let mongo_db_name = "honey";//env::var("MONGO_DB_NAME").expect("MONGO_DB_NAME is not found.");
-
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let client = Client::with_options(client_options)?;
-    let database = client.database(mongo_db_name);//.as_str());
-
-    println!("MongoDB Connected!");
-
-    Ok(database)
-}
-
-pub async fn find_user_by_id(
-    db: &Database,
-    uid: &String,
-    upw: &String,
-) -> mongodb::error::Result<Option<User>> {
-    println!("hellooooooooo ---- p0 ");
-    let collection = db.collection::<User>("user");
-
-    println!("hellooooooooo ---- p1 ");
-    let user = collection.find_one(doc! {"id":uid }, None)?.await?;
-    println!("hellooooooooo ---- p2 ");
-
-    if user.is_none() {
-        println!("hellooooooooo ---- p3 ");
-        return Ok(None);
+    let options = ClientOptions::parse("mongodb://root:root@localhost:27017/").await?;
+    let client = Client::with_options(options)?;
+    for database_name in client.list_database_names(None, None).await? {
+        println!("{}", database_name);
     }
-    
-    println!("hellooooooooo ---- p4 ");
-    let user = user.unwrap();
-    println!("hellooooooooo ---- p5 ");
-    // transform ObjectId to String
-    let user_json = User {
-        _id: user._id.to_string(),
-        id: user.id.to_string(),
-        pw: user.pw.to_string(),
-    };
+    let database = client.database("honey");
+    for collection_name in database.list_collection_names(None).await? {
+        println!("{}", collection_name);
+    }
 
-    println!("helloooooooooo");
-    println!("{}, {}, {}", user_json._id, user_json.id, user_json.pw);
-
-    Ok(Some(user_json))
+    let user_collection = database.collection::<User>("user");
+    let mut cursor = user_collection.find(doc! { "id": id }, None).await?;
+    // Iterate over the results of the cursor.
+    while let Some(user) = cursor.try_next().await? {
+        println!("id: {}", user.id);
+        return Ok(String::from("found"));
+    }
+    Err(mongodb::error::ErrorKind::SessionsNotSupported.into())
 }
