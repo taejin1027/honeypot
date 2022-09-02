@@ -15,7 +15,8 @@ use std::env;
 pub async fn find_user(id: &String, pw: &String) -> mongodb::error::Result<String> {
     env::set_var("RUST_BACKTRACE", "1");
 
-    let options = ClientOptions::parse("mongodb://root:root@localhost:27017/").await?;
+    let options = ClientOptions::parse("mongodb://root:example@mongo:27017/").await?;
+    // let options = ClientOptions::parse("mongodb://root:root@localhost:27017/").await?;
     let client = Client::with_options(options)?;
     for database_name in client.list_database_names(None, None).await? {
         println!("{}", database_name);
