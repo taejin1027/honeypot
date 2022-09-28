@@ -1,2 +1,4 @@
 back/Cargo.lock
+front/Cargo.lock
 target
+dist

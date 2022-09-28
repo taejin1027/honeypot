@@ -1,0 +1,36 @@
+version: '3'
+services:
+  honeypot-front:
+    container_name: honeypot-front
+    image: honeypot-front:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile.front
+    ports:
+      - 8080:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    stdin_open: true
+    tty: true
+  honeypot-back:
+    container_name: honeypot-back
+    image: honeypot-back:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile.back
+    ports:
+      - 8081:8081
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    stdin_open: true
+    tty: true
+  honeypot-db:
+    container_name: honeypot-db
+    image: mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: honeypot
+      MONGO_INITDB_ROOT_PASSWORD: honeypot
+    ports:
+      - 27017:27017
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

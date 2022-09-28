@@ -15,13 +15,12 @@ use std::env;
 pub async fn find_user(id: &String, pw: &String) -> mongodb::error::Result<String> {
     env::set_var("RUST_BACKTRACE", "1");
 
-    let options = ClientOptions::parse("mongodb://root:example@mongo:27017/").await?;
-    // let options = ClientOptions::parse("mongodb://root:root@localhost:27017/").await?;
+    let options = ClientOptions::parse("mongodb://honeypot:honeypot@host.docker.internal:27017/?authSource=admin").await?;
     let client = Client::with_options(options)?;
     for database_name in client.list_database_names(None, None).await? {
         println!("{}", database_name);
     }
-    let database = client.database("honey");
+    let database = client.database("honeypot");
     for collection_name in database.list_collection_names(None).await? {
         println!("{}", collection_name);
     }

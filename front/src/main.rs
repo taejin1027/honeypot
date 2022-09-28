@@ -1,125 +1,78 @@
-use yew::{prelude::*, props};
-use serde_json::Value;
-use web_sys::{HtmlInputElement, Text};
+use yew::prelude::*;
+use reqwasm::http::Request;
+use web_sys::HtmlInputElement;
+use js_sys::JsString;
 
 fn main() {
     yew::start_app::<Login>();
 }
 
 #[derive(PartialEq, Debug, Clone)]
-struct Account{
+struct Account {
     id : String,
-    pw : String,
+    pw : String    
 }
 
 #[function_component(Login)]
 fn login() -> Html{
-    let id = "ID";
-    let pw = "PASSWORD";
+    let input_id_ref = NodeRef::default();
+    let input_pw_ref = NodeRef::default();
 
-    let id_input_ref = NodeRef::default();
-    let id_input_ref_outer = id_input_ref.clone();
-    let pw_input_ref = NodeRef::default();
-    let pw_input_ref_outer = pw_input_ref.clone();
+    // document node reference들은 반드시 clone해서 써야 한다
+    let input_id = input_id_ref.clone();
+    let input_pw = input_pw_ref.clone();
 
-    let account_state = use_state_eq::<Option<Account>, _>( || None);
-    let account_state_outer = account_state.clone();
-    let login_state = use_state_eq::<Option<Result>, _>( || None);
-    let login_state_outer = login_state.clone();
+    // https://yew.rs/docs/concepts/function-components/pre-defined-hooks#use_state
+    let login_result = use_state(|| None);
+    let _login_result = login_result.clone();
+    // login() 내의 모든 변수들은 Callback::from() Closure로 소유권이 move 됨
+    let onclick = Callback::from(move |_| {
+            let id = input_id.cast::<HtmlInputElement>().unwrap().value();
+            let pw = input_pw.cast::<HtmlInputElement>().unwrap().value();
+            let login_result = login_result.clone();
+            // Callback::from() Closure 내의 모든 변수들은  wasm_bindgen_futures::spawn_local() Closure로 소유권이 move 됨
+            wasm_bindgen_futures::spawn_local(async move {
+                let backend_url = format!("http://localhost:8081/login?id={id}&pw={pw}");
+                let backend_msg = Request::get(&backend_url).send().await.unwrap().text().await.unwrap();                
+                web_sys::console::log_1(&JsString::from(backend_msg.clone()));
+                if backend_msg == String::from("welcome!") {
+                    login_result.set(Some(true));
+                }
+                else {
+                    login_result.set(Some(false));
+                }
+            });
+        });
 
-    let onclick = Callback::from(move |mouse_event:MouseEvent| {
-        web_sys::console::log_1(&mouse_event.into());
-
-        let id_input = id_input_ref.cast::<HtmlInputElement>().unwrap();
-        let pw_input = pw_input_ref.cast::<HtmlInputElement>().unwrap();
-        
-        let id_input_v = id_input.value();
-        let pw_input_v = pw_input.value();
-        
-        account_state.set(None);
-
-        let account_state = account_state.clone();
-
-        let test = Account {
-            id : id_input_v,
-            pw : pw_input_v,
-        };
-        account_state.set(Some(test));
-    });
-
+    // 따라서 아래에서 login() 내의 변수들을 사용하려면 clone한 것을 사용해야 함
     html!{
         <div>
-            <p>{id}</p>
-            <input ref = {id_input_ref_outer.clone()} type="text"/>
-            <p>{pw}</p>
-            <input ref = {pw_input_ref_outer.clone()} type="text"/>
-            <button {onclick}>{"LOGIN"}</button>
-            <ResultComp account = {(*account_state_outer).clone()} login_state={(login_state_outer).clone()} />
+            <p>{"id"}</p>
+            <input ref = {input_id_ref} type="text"/>
+            <p>{"password"}</p>
+            <input ref = {input_pw_ref} type="text"/>
+            <button onclick={onclick}>{"login"}</button>
+            // UseStateHandle<>은 Deref traits를 구현하고 있기 때문에 담겨있는 실제 state 값을 참조하려면 역참조 연산자 *를 사용해야 함
+            <LoginResult login_result={*_login_result} />
         </div>
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
-enum Result{
-    Correct,
-    Incorrect,
-}
-
 #[derive(Properties, PartialEq)]
-struct ResultPros{
-    account : Option<Account>,
-    login_state : UseStateHandle<Option<Result>>,
+struct LoginResultProps {
+    login_result: Option<bool>
 }
 
-#[function_component(ResultComp)]
-fn resultcomp(props : &ResultPros) -> Html{
-
-    let account = match &props.account{
-        Some(p) => p,
-        None => return html!{},
-    };
-
-    let login_state_outer = props.login_state.clone();
-    let login_state = props.login_state.clone();
-
-    let id = account.id.clone();
-    let pw = account.pw.clone();
-
-    let remote = Account{
-        id : String::from("HoneyPot"),
-        pw : String::from("1234"),
-    };
-
-    if id == remote.id && pw == remote.pw {
-        login_state.set(Some(Result::Correct));
-        web_sys::console::log_1(&"로그인 성공!!!".into());
-    }else {
-        login_state.set(Some(Result::Incorrect));  
-        web_sys::console::log_1(&"로그인 실패...".into());          
-    }
-
-    html!{
-        <div>
-            <Connection result = {(*login_state_outer).clone()} />
-        </div>
-    }
-}
-
-
-#[derive(Properties, PartialEq)]
-struct LoginResult{
-    result : Option<Result>,
-}
-
-#[function_component(Connection)]
-fn connection(props : &LoginResult) -> Html{
-    let text = match &props.result{
-        None => return html!{<div>{"로그인 해주세요."} </div>},
-        Some(Result::Correct) => "로그인 성공!!!",
-        Some(Result::Incorrect) => "로그인 실패...",
+#[function_component(LoginResult)]
+// prop은 LoginResultProps type의 login_result를 borrow함
+fn login_result(props : &LoginResultProps) -> Html{
+    let login_result_msg = match &props.login_result {
+        Some(true) => "login success!!!",
+        Some(false) => "login fail...",
+        None => ""
     };
 
     html!{
-        <div>{text}</div>
+        <div>{login_result_msg}</div>
     }
 }
